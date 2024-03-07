@@ -21,16 +21,15 @@ resource "aws_iam_role_policy_attachment" "example-AmazonEKSClusterPolicy" {
   role       = aws_iam_role.example.name
 }
 
-#get vpc data
-data "aws_vpc" "default" {
-  default = true
-}
-#get public subnets for cluster
-data "aws_subnets" "public" {
-  filter {
-    name   = "vpc-id"
-    values = [data.aws_vpc.default.id]
+data "terraform_remote_state" "eks_vpc" {
+  backend = "s3"
+  config = {
+    bucket = "class32devops"
+    key = "terraform/terraform.tfstate"
+    region = "us-east-1"
   }
+}
+
 }
 #cluster provision
 resource "aws_eks_cluster" "example" {
@@ -38,7 +37,10 @@ resource "aws_eks_cluster" "example" {
   role_arn = aws_iam_role.example.arn
 
   vpc_config {
-    subnet_ids = data.aws_subnets.public.ids
+    subnet_ids = [
+    data.terraform_remote_state.eks_vpc.outputs.private_subnets[0],
+    data.terraform_remote_state.eks_vpc.outputs.private_subnets[1]
+  ]
   }
 
   # Ensure that IAM Role permissions are created before and deleted after EKS Cluster handling.
@@ -83,7 +85,11 @@ resource "aws_eks_node_group" "example" {
   cluster_name    = aws_eks_cluster.example.name
   node_group_name = "Node-cloud"
   node_role_arn   = aws_iam_role.example1.arn
-  subnet_ids      = data.aws_subnets.public.ids
+  subnet_ids = [
+    data.terraform_remote_state.eks_vpc.outputs.private_subnets[0],
+    data.terraform_remote_state.eks_vpc.outputs.private_subnets[1]
+  ]
+}
 
   scaling_config {
     desired_size = 1
